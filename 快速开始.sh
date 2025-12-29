@@ -51,7 +51,7 @@ echo ""
 echo "下一步："
 echo "1. 编辑 .env.local 配置环境变量（如需要）"
 echo "2. 运行 'npm run dev' 启动开发服务器"
-echo "3. 访问 http://localhost:3000"
+echo "3. 访问 http://localhost:3001"
 echo ""
 echo "📚 查看 README.md 和 开发指南.md 了解更多信息"
 

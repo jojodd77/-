@@ -43,7 +43,7 @@ yarn dev
 pnpm dev
 ```
 
-打开 [http://localhost:3000](http://localhost:3000) 查看结果。
+打开 [http://localhost:3001](http://localhost:3001) 查看结果。
 
 ### 构建生产版本
 

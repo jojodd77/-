@@ -80,7 +80,7 @@ npm install
 npm run dev
 ```
 
-访问 http://localhost:3000 查看项目
+访问 http://localhost:3001 查看项目
 
 ---
 
