@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Sidebar from "@/components/Sidebar";
 
 export const metadata: Metadata = {
   title: "发音修正平台",
@@ -14,7 +15,12 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
-        {children}
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 ml-64">
+            {children}
+          </main>
+        </div>
       </body>
     </html>
   );
