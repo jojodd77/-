@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "工具平台",
-  description: "一个现代化的全栈工具平台",
+  title: "发音修正平台",
+  description: "TTS发音修正和优化工具平台",
 };
 
 export default function RootLayout({
