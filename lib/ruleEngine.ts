@@ -77,7 +77,7 @@ const polyphonicRules: Record<string, Record<string, string>> = {
 /**
  * 使用规则引擎修正文本
  */
-export function correctWithRuleEngine(text: string): CorrectionResult {
+export function correctWithRuleEngine(text: string, targetChar?: string): CorrectionResult {
   const corrections: Array<{
     position: number;
     original: string;
@@ -88,51 +88,124 @@ export function correctWithRuleEngine(text: string): CorrectionResult {
   let correctedText = text;
   let hasCorrection = false;
   
+  // 如果指定了要检查的文字，只检查这个文字
+  const charsToCheck = targetChar ? [targetChar] : Object.keys(polyphonicRules);
+  
   // 检查每个多音字
-  for (const [char, rules] of Object.entries(polyphonicRules)) {
+  for (const char of charsToCheck) {
     if (!text.includes(char)) continue;
     
     // 检查是否已经有标注
     if (text.includes(`${char}(/`)) continue;
     
+    const rules = polyphonicRules[char];
+    if (!rules) {
+      // 如果字符不在规则库中，跳过（不是多音字）
+      continue;
+    }
+    
     // 检查每个规则
+    let foundMatch = false;
     for (const [word, pinyin] of Object.entries(rules)) {
       if (text.includes(word)) {
-        // 找到需要修正的位置
-        const index = text.indexOf(word);
-        const charIndex = word.indexOf(char);
-        const position = index + charIndex;
-        
-        // 检查是否已经修正过
-        if (correctedText.substring(position, position + char.length + 10).includes('(/')) {
-          continue;
+        foundMatch = true;
+        // 找到需要修正的位置（处理多个出现的情况）
+        let searchIndex = 0;
+        while (true) {
+          const index = text.indexOf(word, searchIndex);
+          if (index === -1) break;
+          
+          const charIndex = word.indexOf(char);
+          const position = index + charIndex;
+          
+          // 检查是否已经修正过
+          if (!correctedText.substring(position, position + char.length + 10).includes('(/')) {
+            // 进行修正
+            const before = correctedText.substring(0, position);
+            const after = correctedText.substring(position + char.length);
+            correctedText = before + `${char}(/${pinyin}/)` + after;
+            
+            corrections.push({
+              position,
+              original: char,
+              corrected: `${char}(/${pinyin}/)`,
+              reason: `多音字"${char}"在"${word}"中应读作${pinyin}`
+            });
+            
+            hasCorrection = true;
+          }
+          
+          searchIndex = index + 1;
         }
         
-        // 进行修正
-        const before = correctedText.substring(0, position);
-        const after = correctedText.substring(position + char.length);
-        correctedText = before + `${char}(/${pinyin}/)` + after;
-        
-        corrections.push({
-          position,
-          original: char,
-          corrected: `${char}(/${pinyin}/)`,
-          reason: `多音字"${char}"在"${word}"中应读作${pinyin}`
-        });
-        
-        hasCorrection = true;
-        break; // 只修正第一个匹配的
+        if (hasCorrection) break; // 找到匹配后跳出
       }
+    }
+    
+    // 如果是多音字但没有匹配到规则，仍然需要修正（由大模型判断读音）
+    // 这里标记为需要修正，但具体读音由大模型确定
+    if (!foundMatch && rules) {
+      // 找到所有该字符出现的位置
+      let searchIndex = 0;
+      while (true) {
+        const index = text.indexOf(char, searchIndex);
+        if (index === -1) break;
+        
+        // 检查是否已经修正过
+        if (!correctedText.substring(index, index + char.length + 10).includes('(/')) {
+          // 标记为需要修正，但具体读音由大模型确定
+          // 这里不进行实际修正，只是标记需要修正
+          hasCorrection = true;
+          // 注意：这里不添加 corrections，因为不知道正确读音，需要大模型判断
+        }
+        
+        searchIndex = index + 1;
+      }
+    }
+    
+    if (targetChar && hasCorrection) break; // 如果指定了文字，找到后立即返回
+  }
+  
+  // 检查是否有未匹配规则的多音字需要修正
+  let hasUnmatchedPolyphonic = false;
+  for (const char of charsToCheck) {
+    if (!text.includes(char)) continue;
+    if (text.includes(`${char}(/`)) continue; // 已经有标注
+    
+    const rules = polyphonicRules[char];
+    if (!rules) continue; // 不是多音字
+    
+    // 检查是否匹配到规则
+    let matched = false;
+    for (const word of Object.keys(rules)) {
+      if (text.includes(word)) {
+        matched = true;
+        break;
+      }
+    }
+    
+    // 如果是多音字但没有匹配到规则，标记为需要修正
+    if (!matched) {
+      hasUnmatchedPolyphonic = true;
+      break;
     }
   }
   
-  if (hasCorrection) {
+  if (hasCorrection || hasUnmatchedPolyphonic) {
+    // 如果有修正或者有多音字需要修正（但不知道读音），返回需要修正
+    // 如果有多音字但没有匹配到规则，corrections 可能为空，需要大模型判断读音
     return {
       originalText: text,
-      correctedText,
+      correctedText: hasCorrection ? correctedText : text, // 如果有修正使用修正后的文本，否则使用原文
       isCompliant: false,
-      message: `已修正${corrections.length}处发音标注`,
-      corrections
+      message: hasCorrection 
+        ? (targetChar 
+          ? `已修正文字"${targetChar}"的发音标注`
+          : `已修正${corrections.length}处发音标注`)
+        : (targetChar
+          ? `文字"${targetChar}"是多音字，需要标注读音`
+          : '文本中包含多音字，需要标注读音'),
+      corrections: corrections.length > 0 ? corrections : undefined
     };
   }
   
@@ -140,29 +213,35 @@ export function correctWithRuleEngine(text: string): CorrectionResult {
     originalText: text,
     correctedText: text,
     isCompliant: true,
-    message: '文本符合发音规则，无需修正。'
+    message: targetChar 
+      ? `文字"${targetChar}"在文本中读音明确，无需修正。`
+      : '文本符合发音规则，无需修正。'
   };
 }
 
 /**
  * 混合使用规则引擎和大模型
- * 优先使用规则引擎，如果规则引擎无法处理，再使用大模型
+ * 优先使用大模型的结果（更准确），规则引擎作为补充和验证
  */
 export function hybridCorrection(
   text: string,
   llmResult: CorrectionResult
 ): CorrectionResult {
-  // 先使用规则引擎
-  const ruleResult = correctWithRuleEngine(text);
+  // 优先使用大模型的结果（更准确，能理解上下文）
+  if (!llmResult.isCompliant && llmResult.corrections && llmResult.corrections.length > 0) {
+    console.log('✅ 使用大模型修正结果');
+    return llmResult;
+  }
   
-  // 如果规则引擎有修正，使用规则引擎的结果
+  // 如果大模型没有修正，使用规则引擎作为补充
+  const ruleResult = correctWithRuleEngine(text);
   if (!ruleResult.isCompliant) {
-    console.log('✅ 使用规则引擎修正');
+    console.log('✅ 使用规则引擎补充修正');
     return ruleResult;
   }
   
-  // 如果规则引擎没有修正，使用大模型的结果
-  console.log('✅ 使用大模型修正');
+  // 如果都没有修正，返回大模型的结果（可能判断为符合规则）
+  console.log('✅ 使用大模型判断结果');
   return llmResult;
 }
 

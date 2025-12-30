@@ -5,6 +5,7 @@ import { CorrectionResponse } from '@/types';
 
 export default function CorrectionPage() {
   const [inputText, setInputText] = useState('');
+  const [targetChar, setTargetChar] = useState('');
   const [result, setResult] = useState<CorrectionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,12 +23,17 @@ export default function CorrectionPage() {
     setResult(null);
 
     try {
+      const requestBody: { text: string; targetChar?: string } = { text: inputText };
+      if (targetChar.trim()) {
+        requestBody.targetChar = targetChar.trim();
+      }
+
       const response = await fetch('/api/correct', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text: inputText }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -51,7 +57,13 @@ export default function CorrectionPage() {
         localStorage.setItem('correctionHistory', JSON.stringify(history.slice(0, 50)));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '处理失败，请稍后重试');
+      // 尝试获取更详细的错误信息
+      let errorMessage = '处理失败，请稍后重试';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
+      console.error('API 调用错误:', err);
     } finally {
       setLoading(false);
     }
@@ -59,6 +71,7 @@ export default function CorrectionPage() {
 
   const handleClear = () => {
     setInputText('');
+    setTargetChar('');
     setResult(null);
     setError(null);
   };
@@ -89,6 +102,23 @@ export default function CorrectionPage() {
               />
               <p className="mt-2 text-sm text-gray-500">
                 支持中文和英文文本，系统会自动检测并修正发音
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="target-char-input" className="block text-sm font-medium text-gray-700 mb-2">
+                指定要检查的文字
+              </label>
+              <input
+                id="target-char-input"
+                type="text"
+                value={targetChar}
+                onChange={(e) => setTargetChar(e.target.value)}
+                placeholder="例如：中,重,解（多个文字用逗号隔开，留空则检查所有多音字）"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="mt-2 text-sm text-gray-500">
+                如果填写，系统只会判断和修正这个文字在文本中的读音是否正确。如果要检查多个文字，请用逗号隔开，例如：中,重,解
               </p>
             </div>
 
@@ -167,6 +197,17 @@ export default function CorrectionPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* 显示使用的大模型信息（仅在使用真实大模型时显示） */}
+              {result.model && result.model !== '模拟逻辑' && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 text-center">
+                    {result.model === '智谱清言 API' && '✅ 使用智谱清言 API'}
+                    {result.model === '百度千帆 API' && '✅ 使用百度千帆 API'}
+                    {result.model === 'OpenAI API' && '✅ 使用 OpenAI API'}
+                  </p>
                 </div>
               )}
             </div>
