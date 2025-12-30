@@ -6,7 +6,7 @@
 
 import { buildCorrectionPrompt } from './prompt';
 
-export async function callBaiduAPI(text: string): Promise<any> {
+export async function callBaiduAPI(text: string, targetChar?: string): Promise<any> {
   const apiKey = process.env.BAIDU_API_KEY;
   const secretKey = process.env.BAIDU_SECRET_KEY;
   
@@ -27,7 +27,7 @@ export async function callBaiduAPI(text: string): Promise<any> {
   }
 
   const accessToken = tokenData.access_token;
-  const prompt = buildCorrectionPrompt(text);
+  const prompt = buildCorrectionPrompt(text, targetChar);
 
   // 调用 ERNIE 模型
   const url = `https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/ernie_speed?access_token=${accessToken}`;
