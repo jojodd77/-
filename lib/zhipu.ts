@@ -23,7 +23,7 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
   // 如果指定了要检查的文字，验证它是否在文本中
   if (targetChar && targetChar.trim()) {
     // 支持多个字符，用逗号分隔
-    const chars = targetChar.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    const chars = targetChar.split(',').map((c: string) => c.trim()).filter((c: string) => c.length > 0);
     
     if (chars.length === 0) {
       return {
@@ -35,7 +35,7 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
     }
     
     // 检查每个字符是否在文本中
-    const missingChars = chars.filter(char => !text.includes(char));
+    const missingChars = chars.filter((char: string) => !text.includes(char));
     if (missingChars.length > 0) {
       return {
         originalText: text,
@@ -137,7 +137,7 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
   // 如果指定了要检查的文字，过滤修正结果，只保留这些文字的修正
   if (targetChar && targetChar.trim()) {
     // 支持多个字符，用逗号分隔
-    const chars = targetChar.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    const chars = targetChar.split(',').map((c: string) => c.trim()).filter((c: string) => c.length > 0);
     
     if (chars.length > 0 && rawResult.corrections && rawResult.corrections.length > 0) {
       // 过滤修正，只保留指定文字的修正
@@ -147,7 +147,7 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
         // 重新构建修正后的文本，只包含指定文字的修正
         let correctedText = text;
         // 从后往前替换，避免位置偏移
-        filteredCorrections.sort((a, b) => b.position - a.position);
+        filteredCorrections.sort((a: Correction, b: Correction) => b.position - a.position);
         for (const correction of filteredCorrections) {
           const before = correctedText.substring(0, correction.position);
           const after = correctedText.substring(correction.position + correction.original.length);
@@ -159,14 +159,14 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
           correctedText,
           corrections: filteredCorrections,
           isCompliant: false,
-          message: `已修正文字${chars.map(c => `"${c}"`).join('、')}的发音标注`
+          message: `已修正文字${chars.map((c: string) => `"${c}"`).join('、')}的发音标注`
         };
       } else {
         // 如果没有找到指定文字的修正，判断为符合规则
         rawResult = {
           ...rawResult,
           isCompliant: true,
-          message: `文字${chars.map(c => `"${c}"`).join('、')}在文本中读音正确，无需修正。`,
+          message: `文字${chars.map((c: string) => `"${c}"`).join('、')}在文本中读音正确，无需修正。`,
           corrections: []
         };
       }
@@ -191,7 +191,7 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
   // 如果指定了要检查的文字，且大模型判断为符合规则，使用规则引擎作为补充检查
   if (targetChar && targetChar.trim()) {
     // 支持多个字符，用逗号分隔
-    const chars = targetChar.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    const chars = targetChar.split(',').map((c: string) => c.trim()).filter((c: string) => c.length > 0);
     if (chars.length > 0) {
       // 对每个字符分别检查
       for (const char of chars) {
