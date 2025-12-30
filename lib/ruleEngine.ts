@@ -166,39 +166,14 @@ export function correctWithRuleEngine(text: string, targetChar?: string): Correc
     if (targetChar && hasCorrection) break; // 如果指定了文字，找到后立即返回
   }
   
-  // 检查是否有未匹配规则的多音字需要修正
-  let hasUnmatchedPolyphonic = false;
-  for (const char of charsToCheck) {
-    if (!text.includes(char)) continue;
-    if (text.includes(`${char}(/`)) continue; // 已经有标注
-    
-    const rules = polyphonicRules[char];
-    if (!rules) continue; // 不是多音字
-    
-    // 检查是否匹配到规则
-    let matched = false;
-    for (const word of Object.keys(rules)) {
-      if (text.includes(word)) {
-        matched = true;
-        break;
-      }
-    }
-    
-    // 如果是多音字但没有匹配到规则，标记为需要修正
-    if (!matched) {
-      hasUnmatchedPolyphonic = true;
-      break;
-    }
-  }
-  
-  if (hasCorrection || hasUnmatchedPolyphonic) {
-    // 如果有修正或者有多音字需要修正（但不知道读音），返回需要修正
+  if (hasCorrection) {
+    // 如果有修正，返回修正结果
     // 如果有多音字但没有匹配到规则，corrections 可能为空，需要大模型判断读音
     return {
       originalText: text,
-      correctedText: hasCorrection ? correctedText : text, // 如果有修正使用修正后的文本，否则使用原文
+      correctedText: correctedText,
       isCompliant: false,
-      message: hasCorrection 
+      message: corrections.length > 0
         ? (targetChar 
           ? `已修正文字"${targetChar}"的发音标注`
           : `已修正${corrections.length}处发音标注`)
