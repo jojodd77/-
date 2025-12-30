@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { buildCorrectionPrompt } from '@/lib/prompt';
 import { callZhipuAPI } from '@/lib/zhipu';
 import { callBaiduAPI } from '@/lib/baidu';
+import { CorrectionResponse, CorrectionRequest } from '@/types';
 
 /**
  * 发音修正 API
@@ -12,13 +13,6 @@ import { callBaiduAPI } from '@/lib/baidu';
  * - Claude (Anthropic)
  * - 其他兼容 OpenAI API 的模型
  */
-
-interface CorrectionRequest {
-  text: string;
-  targetChar?: string; // 可选：指定要检查的文字，如果提供则只检查这个文字
-}
-
-import { CorrectionResponse } from '@/types';
 
 /**
  * 调用大模型进行发音修正
