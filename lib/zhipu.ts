@@ -6,6 +6,7 @@
 
 import { buildCorrectionPrompt } from './prompt';
 import { correctWithRuleEngine } from './ruleEngine';
+import { Correction } from '@/types';
 
 interface ZhipuResponse {
   choices: Array<{
@@ -140,7 +141,7 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
     
     if (chars.length > 0 && rawResult.corrections && rawResult.corrections.length > 0) {
       // 过滤修正，只保留指定文字的修正
-      const filteredCorrections = rawResult.corrections.filter(c => chars.includes(c.original));
+      const filteredCorrections = rawResult.corrections.filter((c: Correction) => chars.includes(c.original));
       
       if (filteredCorrections.length > 0) {
         // 重新构建修正后的文本，只包含指定文字的修正
