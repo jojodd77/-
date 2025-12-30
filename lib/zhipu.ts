@@ -175,7 +175,7 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
       rawResult = {
         ...rawResult,
         isCompliant: true,
-        message: `文字${chars.map(c => `"${c}"`).join('、')}在文本中读音正确，无需修正。`,
+        message: `文字${chars.map((c: string) => `"${c}"`).join('、')}在文本中读音正确，无需修正。`,
         corrections: []
       };
     }

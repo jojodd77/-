@@ -6,9 +6,9 @@
 
 export function buildCorrectionPrompt(text: string, targetChar?: string): string {
   // 支持多个字符，用逗号分隔
-  const chars = targetChar ? targetChar.split(',').map(c => c.trim()).filter(c => c.length > 0) : [];
+  const chars = targetChar ? targetChar.split(',').map((c: string) => c.trim()).filter((c: string) => c.length > 0) : [];
   const targetCharInstruction = chars.length > 0
-    ? `\n\n**特别要求：本次只需要检查以下文字在文本中的读音是否正确：${chars.map(c => `"${c}"`).join('、')}。如果文本中有多个相同文字，需要检查所有出现的位置。其他文字不需要检查。**`
+    ? `\n\n**特别要求：本次只需要检查以下文字在文本中的读音是否正确：${chars.map((c: string) => `"${c}"`).join('、')}。如果文本中有多个相同文字，需要检查所有出现的位置。其他文字不需要检查。**`
     : '';
 
   return `你是专业的TTS发音修正专家，具有深厚的语言学知识。请**非常仔细**地分析文本的上下文语境，**准确无误**地判断多音字的正确读音，并严格按照《TTS小模型发音修正用户手册2》的新方案规则进行修正。
@@ -92,14 +92,14 @@ export function buildCorrectionPrompt(text: string, targetChar?: string): string
 
 输入文本：${text}${chars.length > 0 ? `\n指定检查的文字：${chars.join('、')}` : ''}
 
-**请仔细分析文本的上下文，${chars.length > 0 ? `准确判断文字${chars.map(c => `"${c}"`).join('、')}在文本中的读音是否正确` : '准确判断每个多音字的正确读音'}，然后进行修正。**
+**请仔细分析文本的上下文，${chars.length > 0 ? `准确判断文字${chars.map((c: string) => `"${c}"`).join('、')}在文本中的读音是否正确` : '准确判断每个多音字的正确读音'}，然后进行修正。**
 
 **重要：如果文本中出现多音字，无论读音是否明确，都必须进行标注修正。只有在文本中完全没有多音字的情况下，才返回 isCompliant: true。**
 
 **如果文本中有需要修正的多音字**：
 {"isCompliant": false, "correctedText": "修正后的完整文本（必须包含所有修正）", "message": "已修正X处多音字", "corrections": [{"position": 位置索引, "original": "原字", "corrected": "字(/拼音/)", "reason": "多音字，根据上下文应读作XX"}]}
 
-${chars.length > 0 ? `**特别注意：只检查文字${chars.map(c => `"${c}"`).join('、')}，其他文字不需要修正。如果这些文字是多音字，无论读音是否明确，都必须进行标注修正。**` : ''}
+${chars.length > 0 ? `**特别注意：只检查文字${chars.map((c: string) => `"${c}"`).join('、')}，其他文字不需要修正。如果这些文字是多音字，无论读音是否明确，都必须进行标注修正。**` : ''}
 
 **关键要求（必须严格遵守）**：
 1. **准确性优先**：必须仔细分析上下文，确保每个多音字的读音判断100%准确
