@@ -68,11 +68,11 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'glm-4', // 使用更准确的模型（glm-4 比 glm-4-flash 更准确）
+      model: 'glm-4', // 使用更准确的模型
       messages: [
         {
           role: 'system',
-          content: '你是专业的TTS发音修正专家，严格按照《TTS小模型发音修正用户手册2》的规则进行修正。只返回JSON格式：{"isCompliant": true/false, "correctedText": "文本", "message": "说明", "corrections": []}。重要：只使用新方案（注音格式：字(/拼音/)），绝对禁止使用旧方案（汉字替换）。必须使用英文半角括号，不能使用中文括号。'
+          content: '你是专业的TTS发音修正专家，严格按照《TTS小模型发音修正用户手册2》的规则进行修正。你的任务是准确识别多音字并根据上下文判断正确读音。只返回JSON格式，不要添加任何其他文字。重要规则：1) 只使用新方案（注音格式：字(/拼音/)），绝对禁止使用旧方案（汉字替换）；2) 必须使用英文半角括号()，不能使用中文括号（）；3) 优先使用数字标调法（zhong1, chong2等）；4) 必须仔细分析上下文，确保读音判断100%准确。'
         },
         {
           role: 'user',
@@ -105,19 +105,160 @@ export async function callZhipuAPI(text: string, targetChar?: string): Promise<a
   console.log(content);
   console.log('==========================');
 
+  // 修复JSON字符串中的未转义双引号
+  // 处理类似 "correctedText": "这句话的"吗(/ma5)"读作轻声。" 的情况
+  function fixUnescapedQuotes(jsonStr: string): string {
+    // 使用状态机方法：逐字符处理，识别字符串值中的未转义双引号
+    let result = '';
+    let inString = false;
+    let escapeNext = false;
+    let stringStart = -1;
+    
+    for (let i = 0; i < jsonStr.length; i++) {
+      const char = jsonStr[i];
+      const prevChar = i > 0 ? jsonStr[i - 1] : '';
+      const nextChar = i < jsonStr.length - 1 ? jsonStr[i + 1] : '';
+      
+      if (escapeNext) {
+        result += char;
+        escapeNext = false;
+        continue;
+      }
+      
+      if (char === '\\') {
+        escapeNext = true;
+        result += char;
+        continue;
+      }
+      
+      if (char === '"') {
+        // 判断这是字符串的开始还是结束
+        // 检查前面是否有冒号（表示这是值）或逗号/左大括号（表示这是键）
+        const before = jsonStr.substring(Math.max(0, i - 20), i);
+        const after = jsonStr.substring(i + 1, Math.min(jsonStr.length, i + 10));
+        
+        // 如果前面有冒号，可能是字符串值的开始
+        const isValueStart = /:\s*$/.test(before);
+        // 如果后面是逗号、右大括号或换行，可能是字符串的结束
+        const isValueEnd = /^\s*[,}\]]/.test(after);
+        
+        if (isValueStart && !inString) {
+          // 字符串值的开始
+          inString = true;
+          stringStart = i;
+          result += char;
+        } else if (inString && isValueEnd) {
+          // 字符串值的结束
+          inString = false;
+          stringStart = -1;
+          result += char;
+        } else if (inString) {
+          // 在字符串值内部的双引号，需要转义
+          result += '\\"';
+        } else {
+          // 其他情况（可能是键名）
+          result += char;
+        }
+      } else {
+        result += char;
+      }
+    }
+    
+    return result;
+  }
+
   // 解析 JSON 响应
   let result;
   try {
+    // 先尝试直接解析
     result = JSON.parse(content);
-  } catch (parseError) {
+  } catch (parseError: any) {
     console.error('JSON 解析失败:', parseError);
     console.error('原始内容:', content);
-    // 如果解析失败，尝试提取 JSON
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      result = JSON.parse(jsonMatch[0]);
+    
+    // 尝试提取 JSON 对象（更宽松的匹配）
+    let jsonStr = content.trim();
+    
+    // 移除可能的 markdown 代码块标记
+    jsonStr = jsonStr.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+    
+    // 尝试找到第一个 { 到最后一个 } 之间的内容
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+      
+      try {
+        result = JSON.parse(jsonStr);
+      } catch (e) {
+        // 如果还是失败，尝试修复常见的JSON错误
+        // 1. 移除可能的尾随逗号
+        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+        
+        // 2. 修复字符串值中的未转义双引号
+        jsonStr = fixUnescapedQuotes(jsonStr);
+        
+        try {
+          result = JSON.parse(jsonStr);
+        } catch (e2: any) {
+          // 如果还是失败，尝试更激进的方法：逐字符分析并修复
+          // 这是一个更复杂的修复方法，用于处理嵌套的引号问题
+          let fixed = '';
+          let inString = false;
+          let escapeNext = false;
+          
+          for (let i = 0; i < jsonStr.length; i++) {
+            const char = jsonStr[i];
+            const prevChar = i > 0 ? jsonStr[i - 1] : '';
+            const nextChar = i < jsonStr.length - 1 ? jsonStr[i + 1] : '';
+            
+            if (escapeNext) {
+              fixed += char;
+              escapeNext = false;
+              continue;
+            }
+            
+            if (char === '\\') {
+              escapeNext = true;
+              fixed += char;
+              continue;
+            }
+            
+            if (char === '"') {
+              // 判断这是字符串的开始/结束，还是字符串内的引号
+              // 如果前面是冒号和空格，或者是逗号/左大括号后的空格，可能是字符串开始
+              // 如果后面是逗号/右大括号/冒号，可能是字符串结束
+              const isStringStart = /[:{\[,]\s*$/.test(fixed);
+              const isStringEnd = /^\s*[,}\]:]/.test(jsonStr.substring(i + 1));
+              
+              if (inString && !isStringEnd) {
+                // 在字符串内部，且不是字符串结束，需要转义
+                fixed += '\\"';
+              } else {
+                fixed += char;
+                if (isStringStart || (inString && isStringEnd)) {
+                  inString = !inString;
+                }
+              }
+            } else {
+              fixed += char;
+              if (char === ':' && /"\s*$/.test(fixed)) {
+                inString = true;
+              }
+            }
+          }
+          
+          try {
+            result = JSON.parse(fixed);
+          } catch (e3: any) {
+            const errorMsg = e3?.message || e2?.message || (parseError as any)?.message || '未知错误';
+            throw new Error(`无法解析 API 返回的 JSON: ${errorMsg}. 原始内容: ${content.substring(0, 300)}`);
+          }
+        }
+      }
     } else {
-      throw new Error('无法解析 API 返回的 JSON: ' + content.substring(0, 200));
+      throw new Error(`无法找到有效的 JSON 内容. 原始内容: ${content.substring(0, 300)}`);
     }
   }
   

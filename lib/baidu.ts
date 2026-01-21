@@ -6,7 +6,7 @@
 
 import { buildCorrectionPrompt } from './prompt';
 
-export async function callBaiduAPI(text: string, targetChar?: string): Promise<any> {
+export async function callBaiduAPI(text: string, targetChar: string): Promise<any> {
   const apiKey = process.env.BAIDU_API_KEY;
   const secretKey = process.env.BAIDU_SECRET_KEY;
   

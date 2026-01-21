@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildCorrectionPrompt } from '@/lib/prompt';
-import { callZhipuAPI } from '@/lib/zhipu';
 import { callBaiduAPI } from '@/lib/baidu';
+import { callUMinferAPI } from '@/lib/uminfer';
 import { CorrectionResponse, CorrectionRequest } from '@/types';
 
 /**
@@ -18,24 +18,24 @@ import { CorrectionResponse, CorrectionRequest } from '@/types';
  * 调用大模型进行发音修正
  * 
  * 优先级：
- * 1. 智谱清言 ChatGLM（免费，推荐）
+ * 1. Modelverse (UMinfer) API（推荐）
  * 2. 百度千帆 ERNIE（免费）
  * 3. OpenAI（付费）
  * 4. 模拟逻辑（未配置时）
  */
-async function callLLM(text: string, targetChar?: string): Promise<CorrectionResponse> {
-  // 优先使用智谱清言（免费，中文支持好）
-  if (process.env.ZHIPU_API_KEY) {
+export async function callLLM(text: string, targetChar: string, modelId?: string): Promise<CorrectionResponse> {
+  // 优先使用 Modelverse (UMinfer) API
+  if (process.env.UMINFER_API_KEY) {
     try {
-      console.log('✅ 使用智谱清言 API');
-      const result = await callZhipuAPI(text, targetChar);
-      return { ...result, model: '智谱清言 API' };
+      console.log(`✅ 使用 Modelverse API${modelId ? ` (模型: ${modelId})` : ''}`);
+      const result = await callUMinferAPI(text, targetChar, modelId);
+      return { ...result, model: 'Modelverse API' };
     } catch (error) {
-      console.error('❌ 智谱清言 API 调用失败:', error);
+      console.error('❌ Modelverse API 调用失败:', error);
       // 如果失败，尝试其他 API
     }
   } else {
-    console.warn('⚠️ ZHIPU_API_KEY 未配置');
+    console.warn('⚠️ UMINFER_API_KEY 未配置');
   }
   
   // 使用百度千帆（免费）
@@ -72,102 +72,32 @@ async function callLLM(text: string, targetChar?: string): Promise<CorrectionRes
  * 模拟修正逻辑（仅用于演示）
  * 实际应该调用大模型
  */
-function simulateCorrection(text: string, targetChar?: string): CorrectionResponse {
-  // 如果指定了要检查的文字，只检查这个文字
-  if (targetChar && targetChar.trim()) {
-    const char = targetChar.trim();
-    if (!text.includes(char)) {
-      return {
-        originalText: text,
-        correctedText: text,
-        isCompliant: true,
-        message: `文本中不包含文字"${char}"。`
-      };
-    }
-    
-    // 检查是否已经有标注
-    if (text.includes(`${char}(/`)) {
-      return {
-        originalText: text,
-        correctedText: text,
-        isCompliant: true,
-        message: `文字"${char}"已有发音标注。`
-      };
-    }
-    
-    // 简单的多音字检测（仅用于演示）
-    const commonPolyphonicWords: Record<string, string[]> = {
-      '中': ['zhong1', 'zhong4'],
-      '重': ['chong2', 'zhong4'],
-      '长': ['chang2', 'zhang3'],
-      '解': ['jie3', 'xie4'],
-      '差': ['cha1', 'chai1', 'ci1'],
-      '一': ['yi1', 'yi2', 'yi4'],
-      '奇': ['qi2', 'ji1']
-    };
-    
-    if (commonPolyphonicWords[char]) {
-      const pronunciations = commonPolyphonicWords[char];
-      const firstOccurrence = text.indexOf(char);
-      const correctedText = text.substring(0, firstOccurrence) + 
-                           `${char}(/${pronunciations[0]}/)` + 
-                           text.substring(firstOccurrence + char.length);
-      
-      return {
-        originalText: text,
-        correctedText: correctedText,
-        isCompliant: false,
-        message: `文字"${char}"需要标注正确读音（模拟结果，仅供参考）。`,
-        corrections: [{
-          position: firstOccurrence,
-          original: char,
-          corrected: `${char}(/${pronunciations[0]}/)`,
-          reason: `多音字"${char}"需要标注正确读音（模拟结果，仅供参考）`
-        }]
-      };
-    }
-    
+function simulateCorrection(text: string, targetChar: string): CorrectionResponse {
+  // 只检查用户指定的文字
+  const chars = targetChar.split(',').map(c => c.trim()).filter(c => c.length > 0);
+  
+  if (chars.length === 0) {
     return {
       originalText: text,
       correctedText: text,
       isCompliant: true,
-      message: `文字"${char}"在文本中读音明确，无需修正（模拟判断，仅供参考）。`
+      message: '要标注的文字不能为空（模拟结果，仅供参考）。'
     };
   }
   
-  // 如果没有指定文字，检查所有多音字（原有逻辑）
-  // 检查文本中是否已经包含发音标注格式
-  const hasPronunciationMarkers = /[\u4e00-\u9fa5]\(\/[^)]+\/\)|[\w]+\(\/[^)]+\/\)/.test(text);
-  
-  if (hasPronunciationMarkers) {
-    // 如果已经有标注，检查格式是否正确
-    const isValidFormat = /[\u4e00-\u9fa5]\(\/[a-z0-9āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]+[1-5]?\/\)|[\w]+\(\/[ˈˌ]?[^)]+\/\)/.test(text);
-    
-    if (isValidFormat) {
-      return {
-        originalText: text,
-        correctedText: text,
-        isCompliant: true,
-        message: "文本符合发音规则格式。"
-      };
-    } else {
-      return {
-        originalText: text,
-        correctedText: text,
-        isCompliant: false,
-        message: "检测到发音标注格式不正确，需要修正。",
-        corrections: [{
-          position: 0,
-          original: text,
-          corrected: text,
-          reason: "格式修正（需要配置大模型 API 才能自动修正）"
-        }]
-      };
-    }
+  // 检查每个字符是否在文本中
+  const missingChars = chars.filter(char => !text.includes(char));
+  if (missingChars.length > 0) {
+    return {
+      originalText: text,
+      correctedText: text,
+      isCompliant: true,
+      message: `文本中不包含指定的文字：${missingChars.join('、')}（模拟结果，仅供参考）。`
+    };
   }
   
   // 简单的多音字检测（仅用于演示）
-  const commonPolyphonicWords = {
+  const commonPolyphonicWords: Record<string, string[]> = {
     '中': ['zhong1', 'zhong4'],
     '重': ['chong2', 'zhong4'],
     '长': ['chang2', 'zhang3'],
@@ -177,27 +107,28 @@ function simulateCorrection(text: string, targetChar?: string): CorrectionRespon
     '奇': ['qi2', 'ji1']
   };
   
+  // 处理用户指定的每个字符
   let needsCorrection = false;
   let correctedText = text;
   const corrections: Array<{position: number, original: string, corrected: string, reason: string}> = [];
   
-  // 简单的多音字检测（实际应该使用大模型判断正确读音）
-  for (const [word, pronunciations] of Object.entries(commonPolyphonicWords)) {
-    if (text.includes(word) && !text.includes(`${word}(/`)) {
+  for (const char of chars) {
+    // 检查是否已经有标注
+    if (text.includes(`${char}(/`)) {
+      continue; // 已经有标注，跳过
+    }
+    
+    if (commonPolyphonicWords[char]) {
       needsCorrection = true;
-      // 注意：这里只是示例，实际应该调用大模型判断正确的读音
-      const firstOccurrence = text.indexOf(word);
-      correctedText = correctedText.replace(
-        word,
-        `${word}(/${pronunciations[0]}/)`
-      );
+      const pronunciations = commonPolyphonicWords[char];
+      const firstOccurrence = correctedText.indexOf(char);
+      correctedText = correctedText.replace(char, `${char}(/${pronunciations[0]}/)`);
       corrections.push({
         position: firstOccurrence,
-        original: word,
-        corrected: `${word}(/${pronunciations[0]}/)`,
-        reason: `多音字"${word}"需要标注正确读音（模拟结果，仅供参考）`
+        original: char,
+        corrected: `${char}(/${pronunciations[0]}/)`,
+        reason: `多音字"${char}"需要标注正确读音（模拟结果，仅供参考）`
       });
-      break;
     }
   }
   
@@ -206,7 +137,7 @@ function simulateCorrection(text: string, targetChar?: string): CorrectionRespon
       originalText: text,
       correctedText: correctedText,
       isCompliant: false,
-      message: "检测到可能需要发音修正的内容（模拟结果，仅供参考）。",
+      message: `已标注用户指定的文字（模拟结果，仅供参考）。`,
       corrections
     };
   }
@@ -215,14 +146,14 @@ function simulateCorrection(text: string, targetChar?: string): CorrectionRespon
     originalText: text,
     correctedText: text,
     isCompliant: true,
-      message: "文本符合发音规则，无需修正（模拟判断，仅供参考）。"
+    message: `用户指定的文字在文本中读音明确，无需修正（模拟判断，仅供参考）。`
   };
 }
 
 /**
  * 调用 OpenAI API
  */
-async function callOpenAI(text: string, targetChar?: string): Promise<CorrectionResponse> {
+async function callOpenAI(text: string, targetChar: string): Promise<CorrectionResponse> {
   const prompt = buildCorrectionPrompt(text, targetChar);
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
   
@@ -303,31 +234,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 如果指定了要检查的文字，验证它是否在文本中
-    if (body.targetChar && body.targetChar.trim()) {
-      const targetChar = body.targetChar.trim();
-      // 支持多个字符，用逗号分隔
-      const chars = targetChar.split(',').map(c => c.trim()).filter(c => c.length > 0);
-      
-      if (chars.length === 0) {
-        return NextResponse.json(
-          { error: '指定的文字不能为空' },
-          { status: 400 }
-        );
-      }
-      
-      // 检查每个字符是否在文本中
-      const missingChars = chars.filter(char => !body.text.includes(char));
-      if (missingChars.length > 0) {
-        return NextResponse.json(
-          { error: `文本中不包含指定的文字：${missingChars.join('、')}` },
-          { status: 400 }
-        );
-      }
+    // 验证要标注的文字是否提供
+    if (!body.targetChar || typeof body.targetChar !== 'string' || !body.targetChar.trim()) {
+      return NextResponse.json(
+        { error: '请提供要标注的文字（多个文字用逗号隔开）' },
+        { status: 400 }
+      );
+    }
+
+    const targetChar = body.targetChar.trim();
+    // 支持多个字符，用逗号分隔
+    const chars = targetChar.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    
+    if (chars.length === 0) {
+      return NextResponse.json(
+        { error: '要标注的文字不能为空' },
+        { status: 400 }
+      );
     }
     
+    // 检查每个字符是否在文本中
+    const missingChars = chars.filter(char => !body.text.includes(char));
+    if (missingChars.length > 0) {
+      return NextResponse.json(
+        { error: `文本中不包含指定的文字：${missingChars.join('、')}` },
+        { status: 400 }
+      );
+    }
+    
+    // 获取模型ID（可选）
+    const modelId = body.modelId || undefined;
+    
     // 调用大模型进行修正
-    const result = await callLLM(body.text, body.targetChar);
+    const result = await callLLM(body.text, targetChar, modelId);
     
     return NextResponse.json(result);
   } catch (error) {

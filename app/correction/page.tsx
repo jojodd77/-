@@ -1,14 +1,48 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CorrectionResponse } from '@/types';
+
+interface Model {
+  id: string;
+  object: string;
+  created: number;
+  owned_by: string;
+}
 
 export default function CorrectionPage() {
   const [inputText, setInputText] = useState('');
   const [targetChar, setTargetChar] = useState('');
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [models, setModels] = useState<Model[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [result, setResult] = useState<CorrectionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 加载模型列表
+  useEffect(() => {
+    const loadModels = async () => {
+      setLoadingModels(true);
+      try {
+        const response = await fetch('/api/get-models');
+        const data = await response.json();
+        if (data.success && data.models) {
+          setModels(data.models);
+          // 设置默认模型为 qwen-turbo 或第一个模型
+          const defaultModel = data.models.find((m: Model) => m.id === 'qwen-turbo') || data.models[0];
+          if (defaultModel) {
+            setSelectedModel(defaultModel.id);
+          }
+        }
+      } catch (err) {
+        console.error('加载模型列表失败:', err);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    loadModels();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,14 +52,24 @@ export default function CorrectionPage() {
       return;
     }
 
+    if (!targetChar.trim()) {
+      setError('请输入要标注的文字（多个文字用逗号隔开）');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      const requestBody: { text: string; targetChar?: string } = { text: inputText };
-      if (targetChar.trim()) {
-        requestBody.targetChar = targetChar.trim();
+      const requestBody: { text: string; targetChar: string; modelId?: string } = { 
+        text: inputText,
+        targetChar: targetChar.trim()
+      };
+      
+      // 如果选择了模型，添加到请求中
+      if (selectedModel) {
+        requestBody.modelId = selectedModel;
       }
 
       const response = await fetch('/api/correct', {
@@ -81,10 +125,10 @@ export default function CorrectionPage() {
       <div className="max-w-5xl mx-auto">
         <div className="bg-white shadow-lg rounded-lg p-6 md:p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            发音判断修正
+            发音标注修正
           </h1>
           <p className="text-gray-600 mb-8">
-            输入文本，系统会自动判断是否符合发音规则，不符合则自动修正
+            输入文本和要标注的文字，系统会根据上下文语境给出正确的拼音标注
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -101,24 +145,53 @@ export default function CorrectionPage() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
               />
               <p className="mt-2 text-sm text-gray-500">
-                支持中文和英文文本，系统会自动检测并修正发音
+                输入需要标注的文本内容
               </p>
             </div>
 
             <div>
               <label htmlFor="target-char-input" className="block text-sm font-medium text-gray-700 mb-2">
-                指定要检查的文字
+                要标注的文字 <span className="text-red-500">*</span>
               </label>
               <input
                 id="target-char-input"
                 type="text"
                 value={targetChar}
                 onChange={(e) => setTargetChar(e.target.value)}
-                placeholder="例如：中,重,解（多个文字用逗号隔开，留空则检查所有多音字）"
+                placeholder="例如：中,重,解（多个文字用逗号隔开，按顺序输入）"
+                required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <p className="mt-2 text-sm text-gray-500">
-                如果填写，系统只会判断和修正这个文字在文本中的读音是否正确。如果要检查多个文字，请用逗号隔开，例如：中,重,解
+                输入要标注的文字，多个文字用逗号隔开。系统会根据上下文语境判断这些文字的正确读音并添加标注。例如：中,重,解
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="model-select" className="block text-sm font-medium text-gray-700 mb-2">
+                选择模型
+              </label>
+              <select
+                id="model-select"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={loadingModels}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                {loadingModels ? (
+                  <option>加载模型中...</option>
+                ) : models.length === 0 ? (
+                  <option>暂无可用模型</option>
+                ) : (
+                  models.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.id}
+                    </option>
+                  ))
+                )}
+              </select>
+              <p className="mt-2 text-sm text-gray-500">
+                选择用于标注的大模型。推荐使用 qwen-turbo、deepseek-ai/DeepSeek-V3.2 或 Qwen/Qwen3-Max
               </p>
             </div>
 

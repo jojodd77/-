@@ -25,6 +25,12 @@ export default function Sidebar() {
       icon: '📖',
       isMain: false
     },
+    { 
+      href: '/test-models', 
+      label: '模型测试',
+      icon: '🧪',
+      isMain: false
+    },
   ];
 
   return (

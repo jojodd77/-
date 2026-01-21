@@ -5,6 +5,7 @@
 export interface CorrectionRequest {
   text: string;
   targetChar?: string; // 可选：指定要检查的文字，如果提供则只检查这个文字
+  modelId?: string; // 可选：指定使用的模型ID
 }
 
 export interface CorrectionResponse {
